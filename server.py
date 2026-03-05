@@ -88,7 +88,11 @@ async def fetch_json(endpoint, params=None, timeout=30, retries=3):
             url = f"{OPENF1_BASE}/{endpoint}"
             resp = await client.get(url, params=params, timeout=timeout)
             if resp.status_code == 200:
-                return resp.json()
+                data = resp.json()
+                # OpenF1 returns {"detail": "No results found."} for empty queries
+                if isinstance(data, dict) and "detail" in data:
+                    return None
+                return data
             if resp.status_code == 429:  # rate limited
                 await asyncio.sleep(2 * (attempt + 1))
                 continue
@@ -115,7 +119,7 @@ async def load_season_data():
 async def load_drivers(session_key):
     global driver_metadata
     drivers = await fetch_json("drivers", {"session_key": session_key})
-    if drivers:
+    if isinstance(drivers, list) and drivers:
         for d in drivers:
             num = d["driver_number"]
             driver_metadata[num] = {
@@ -168,15 +172,16 @@ async def count_xmode_for_driver(session_key, driver_number, session_start, sess
             resp = await client.get(url, timeout=20)
             if resp.status_code == 200:
                 data = resp.json()
-                for row in data:
-                    drs = row.get("drs", 0)
-                    if prev_drs is not None:
-                        was_open = prev_drs in DRS_OPEN_VALUES
-                        is_open = drs in DRS_OPEN_VALUES
-                        if was_open != is_open:
-                            # Transition detected (open→close or close→open)
-                            activations += 1
-                    prev_drs = drs
+                if isinstance(data, list):
+                    for row in data:
+                        drs = row.get("drs", 0)
+                        if prev_drs is not None:
+                            was_open = prev_drs in DRS_OPEN_VALUES
+                            is_open = drs in DRS_OPEN_VALUES
+                            if was_open != is_open:
+                                # Transition detected (open→close or close→open)
+                                activations += 1
+                        prev_drs = drs
         except Exception:
             pass
         current = next_time
@@ -197,7 +202,7 @@ async def process_session(session_info):
 
     # Load drivers for this session
     drivers = await fetch_json("drivers", {"session_key": session_key})
-    if not drivers:
+    if not isinstance(drivers, list) or not drivers:
         print(f"[WARN] No drivers for session {session_key}")
         return
 
@@ -307,7 +312,7 @@ async def poll_live():
     except Exception:
         return
 
-    if not data:
+    if not isinstance(data, list) or not data:
         return
 
     by_driver = {}
@@ -465,8 +470,10 @@ async def main_loop():
             if len(driver_metadata) >= 10:  # Need at least 10 drivers for a valid grid
                 print(f"[INFO] Loaded {len(driver_metadata)} drivers from session {s['session_key']}")
                 break
+            print(f"[INFO] Session {s['session_key']} returned {len(driver_metadata)} drivers so far, trying next...")
             await asyncio.sleep(0.5)
 
+    print(f"[INFO] Final driver count: {len(driver_metadata)}")
     await broadcast_state()
 
     # Periodically reload cache from disk (precompute.py populates it)
