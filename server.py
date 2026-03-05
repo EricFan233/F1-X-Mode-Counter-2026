@@ -453,16 +453,16 @@ async def main_loop():
     await load_season_data()
     print(f"[INFO] {len(all_meetings)} meetings, {len(all_sessions)} sessions")
 
-    # Load latest driver metadata — try multiple sessions until we find one with drivers
-    if not driver_metadata:
+    # Load latest driver metadata — try multiple sessions until we find one with a full grid
+    if len(driver_metadata) < 10:
         race_sessions = sorted(
             [s for s in all_sessions if s.get("session_type") in ("Race", "Sprint", "Qualifying", "Practice")],
             key=lambda s: s["date_start"],
             reverse=True,
         )
-        for s in race_sessions[:10]:  # Try up to 10 most recent sessions
+        for s in race_sessions[:20]:  # Try up to 20 most recent sessions
             await load_drivers(s["session_key"])
-            if driver_metadata:
+            if len(driver_metadata) >= 10:  # Need at least 10 drivers for a valid grid
                 print(f"[INFO] Loaded {len(driver_metadata)} drivers from session {s['session_key']}")
                 break
             await asyncio.sleep(0.5)
