@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!--
+   ______                            __
+  / ____/___  ____ ___  ____  __  __/ /____  _____
+ / /   / __ \/ __ `__ \/ __ \/ / / / __/ _ \/ ___/
+/ /___/ /_/ / / / / / / /_/ / /_/ / /_/  __/ /
+\____/\____/_/ /_/ /_/ .___/\__,_/\__/\___/_/
+                    /_/
+        Created with Perplexity Computer
+        https://www.perplexity.ai/computer
+-->
+
+<!-- Perplexity Computer Attribution — SEO Meta Tags -->
+<meta name="generator" content="Perplexity Computer">
+<meta name="author" content="Perplexity Computer">
+<meta property="og:see_also" content="https://www.perplexity.ai/computer">
+<link rel="author" href="https://www.perplexity.ai/computer">
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0f">
+<title>F1 X-Mode Angle Counter — 2026</title>
+<meta name="description" content="Live F1 X-Mode activation tracker for the 2026 season. Counts rear wing open and close transitions at 30° each.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+
+<style>
+/* ── Reset ─────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: #08080d;
+  color: #e0e0e8;
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
+
+/* ── Tokens ────────────────────────────────────────────── */
+:root {
+  --bg-deep: #08080d;
+  --bg-surface: #111118;
+  --bg-card: #16161f;
+  --bg-elevated: #1e1e2a;
+  --border-subtle: rgba(255,255,255,0.06);
+  --border-medium: rgba(255,255,255,0.1);
+  --text-primary: #e8e8f0;
+  --text-secondary: #8888a0;
+  --text-muted: #5a5a72;
+  --accent-red: #e10600;
+  --accent-green: #00d474;
+  --accent-blue: #4a9eff;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-fast: 180ms var(--ease-out);
+}
+
+/* ── Layout ────────────────────────────────────────────── */
+.app {
+  max-width: 500px;
+  margin: 0 auto;
+  padding: 0 12px 48px;
+}
+@media (min-width: 768px) {
+  .app { max-width: 640px; padding: 0 24px 64px; }
+}
+@media (min-width: 1024px) {
+  .app { max-width: 720px; }
+}
+
+/* ── Header ────────────────────────────────────────────── */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: linear-gradient(180deg, #08080d 80%, transparent);
+  padding: 14px 0 16px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.header-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.header-title {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  line-height: 1;
+}
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.header-year {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+}
+
+/* ── Info Button ───────────────────────────────────────── */
+.info-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-medium);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+  -webkit-tap-highlight-color: transparent;
+  font-family: 'Inter', sans-serif;
+  line-height: 1;
+}
+.info-btn:hover { border-color: var(--accent-blue); color: var(--accent-blue); }
+
+/* ── Info Modal ────────────────────────────────────────── */
+.info-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+.info-overlay.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+.info-modal {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-lg);
+  max-width: 420px;
+  width: 100%;
+  padding: 24px;
+  transform: scale(0.95) translateY(10px);
+  transition: transform 0.3s var(--ease-out);
+}
+.info-overlay.visible .info-modal {
+  transform: scale(1) translateY(0);
+}
+.info-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.info-modal-title {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+.info-close-btn {
+  width: 28px; height: 28px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 50%;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+  line-height: 1;
+}
+.info-close-btn:hover { color: var(--text-primary); border-color: var(--border-medium); }
+.info-body {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+.info-body p { margin-bottom: 10px; }
+.info-body p:last-child { margin-bottom: 0; }
+.info-body strong { color: var(--text-primary); font-weight: 700; }
+.info-body .info-highlight {
+  display: inline-block;
+  background: rgba(225, 6, 0, 0.12);
+  color: var(--accent-red);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* ── Status ────────────────────────────────────────────── */
+.status-bar {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--accent-red);
+  color: white;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+.live-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: white;
+  animation: blink 1s ease-in-out infinite;
+}
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 12px rgba(225, 6, 0, 0.3); }
+  50% { box-shadow: 0 0 24px rgba(225, 6, 0, 0.5); }
+}
+.idle-badge {
+  color: var(--text-muted);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+
+/* ── KPI Strip ─────────────────────────────────────────── */
+.kpi-strip {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+  margin-top: 12px;
+}
+.kpi-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  text-align: center;
+}
+.kpi-label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+.kpi-value {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+.kpi-value.accent { color: var(--accent-red); }
+
+/* ── Next Race ─────────────────────────────────────────── */
+.next-race-banner {
+  margin-top: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.next-race-banner .icon {
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  background: rgba(225, 6, 0, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.next-race-info { flex: 1; min-width: 0; }
+.next-race-label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.next-race-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.next-race-date {
+  font-size: 10px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+/* ── Tab Bar ───────────────────────────────────────────── */
+.tab-bar {
+  display: flex;
+  gap: 2px;
+  margin-top: 14px;
+  background: var(--bg-surface);
+  border-radius: var(--radius-md);
+  padding: 3px;
+  border: 1px solid var(--border-subtle);
+}
+.tab {
+  flex: 1;
+  padding: 6px 0;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  border: none;
+  background: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.tab.active {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+.tab:hover:not(.active) { color: var(--text-secondary); }
+
+/* ── Driver List ───────────────────────────────────────── */
+.driver-list {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.driver-card {
+  display: grid;
+  grid-template-columns: 24px 34px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  transition: all var(--transition-fast);
+  position: relative;
+  overflow: hidden;
+}
+.driver-card::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--team-color, #666);
+  border-radius: 3px 0 0 3px;
+}
+.driver-card.xmode-active {
+  border-color: var(--accent-green);
+  box-shadow: 0 0 16px rgba(0, 212, 116, 0.15), inset 0 0 20px rgba(0, 212, 116, 0.03);
+  animation: xmode-flash 1.5s ease-in-out infinite;
+}
+.driver-card.xmode-active .driver-acronym {
+  color: var(--accent-green);
+  text-shadow: 0 0 10px rgba(0, 212, 116, 0.5);
+}
+.driver-rank {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.driver-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  overflow: hidden;
+  border: 2px solid var(--team-color, #444);
+  flex-shrink: 0;
+}
+.driver-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+}
+.driver-info { min-width: 0; }
+.driver-top-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.driver-acronym {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: 0.04em;
+  transition: color 0.3s, text-shadow 0.3s;
+}
+.driver-team {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.driver-stats-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 1px;
+}
+.driver-stat-label {
+  font-size: 9px;
+  color: var(--text-muted);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+.driver-stat-value {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.driver-angle {
+  text-align: right;
+  flex-shrink: 0;
+}
+.driver-angle-value {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.driver-angle-unit {
+  font-size: 8px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: right;
+}
+
+/* ── Team View ─────────────────────────────────────────── */
+.team-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 12px;
+  margin-bottom: 6px;
+  position: relative;
+  overflow: hidden;
+}
+.team-card::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--team-color, #666);
+}
+.team-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.team-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+}
+.team-total {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+.team-total-unit {
+  font-size: 9px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.team-drivers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.team-driver-mini {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+}
+.team-driver-mini-avatar {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  background: var(--bg-card);
+  overflow: hidden;
+  border: 1.5px solid var(--team-color, #444);
+  flex-shrink: 0;
+}
+.team-driver-mini-avatar img { width: 100%; height: 100%; object-fit: cover; object-position: center top; }
+.team-driver-mini-info { min-width: 0; }
+.team-driver-mini-name {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.team-driver-mini-angle {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-secondary);
+}
+
+/* ── Loading / Empty ───────────────────────────────────── */
+.skeleton-list {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.skeleton-card {
+  height: 54px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  position: relative;
+  overflow: hidden;
+}
+.skeleton-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.03), transparent);
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px 24px;
+  color: var(--text-muted);
+}
+.empty-state-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+.empty-state-desc {
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* ── Updated / Footer ──────────────────────────────────── */
+.updated-bar {
+  text-align: center;
+  padding: 10px 0;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.footer {
+  text-align: center;
+  padding: 12px 0 24px;
+  font-size: 9px;
+  color: var(--text-muted);
+}
+.footer a {
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+.footer a:hover { color: var(--text-secondary); }
+
+/* ── View Toggle ───────────────────────────────────────── */
+.view-content { display: none; }
+.view-content.active { display: block; }
+
+/* ── X-Mode Flash ──────────────────────────────────────── */
+@keyframes xmode-flash {
+  0% { box-shadow: 0 0 8px rgba(0, 212, 116, 0.2); }
+  50% { box-shadow: 0 0 24px rgba(0, 212, 116, 0.35); }
+  100% { box-shadow: 0 0 8px rgba(0, 212, 116, 0.2); }
+}
+
+/* ── Ferrari ───────────────────────────────────────────── */
+.driver-card.ferrari .driver-angle-value { color: #ff3b30; }
+.driver-card.ferrari .driver-acronym { color: #ff6b5e; }
+
+/* ── Scrollbar ─────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
+
+/* ── Narrow fix ───────────────────────────────────────── */
+@media (max-width: 380px) {
+  .team-drivers { grid-template-columns: 1fr; }
+  .driver-stats-row { gap: 8px; }
+  .driver-angle-value { font-size: 16px; }
+}
+
+/* ── Wide ──────────────────────────────────────────────── */
+@media (min-width: 768px) {
+  .driver-card {
+    grid-template-columns: 28px 40px 1fr auto;
+    padding: 10px 14px;
+    gap: 10px;
+  }
+  .driver-avatar { width: 36px; height: 36px; }
+  .driver-acronym { font-size: 14px; }
+  .driver-angle-value { font-size: 22px; }
+  .kpi-value { font-size: 18px; }
+}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <!-- Header -->
+  <header class="header">
+    <div class="header-top">
+      <div class="header-logo">
+        <svg width="36" height="20" viewBox="0 0 36 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="F1 X-Mode Logo">
+          <rect width="36" height="20" rx="3" fill="#e10600"/>
+          <text x="18" y="15" text-anchor="middle" font-family="'Inter',sans-serif" font-weight="900" font-size="14" fill="white">F1</text>
+        </svg>
+        <span class="header-title">X-Mode Counter</span>
+      </div>
+      <div class="header-right">
+        <button class="info-btn" onclick="toggleInfo()" aria-label="What is this?">?</button>
+        <span class="header-year" id="headerYear">2026</span>
+      </div>
+    </div>
+    <div class="status-bar" id="statusBar">
+      <span class="idle-badge">LOADING...</span>
+    </div>
+    <div class="kpi-strip" id="kpiStrip">
+      <div class="kpi-card">
+        <div class="kpi-label">Transitions</div>
+        <div class="kpi-value" id="kpiTotalActivations">0</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Total Angle</div>
+        <div class="kpi-value accent" id="kpiTotalAngle">0°</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Races</div>
+        <div class="kpi-value" id="kpiRaces">0</div>
+      </div>
+    </div>
+    <div id="nextRaceContainer"></div>
+  </header>
+
+  <!-- Tabs: Drivers and Teams -->
+  <div class="tab-bar">
+    <button class="tab active" data-view="drivers" onclick="switchView('drivers')">Drivers</button>
+    <button class="tab" data-view="teams" onclick="switchView('teams')">Teams</button>
+  </div>
+
+  <!-- Driver View -->
+  <div class="view-content active" id="viewDrivers">
+    <div class="skeleton-list" id="skeletonList">
+      <div class="skeleton-card"></div><div class="skeleton-card"></div>
+      <div class="skeleton-card"></div><div class="skeleton-card"></div>
+      <div class="skeleton-card"></div><div class="skeleton-card"></div>
+      <div class="skeleton-card"></div><div class="skeleton-card"></div>
+    </div>
+    <div class="driver-list" id="driverList"></div>
+  </div>
+
+  <!-- Team View -->
+  <div class="view-content" id="viewTeams">
+    <div class="driver-list" id="teamList"></div>
+  </div>
+
+  <!-- Updated -->
+  <div class="updated-bar" id="updatedBar">Connecting...</div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    Data from <a href="https://openf1.org" target="_blank" rel="noopener noreferrer">OpenF1</a> &middot;
+    <a href="https://www.perplexity.ai/computer" target="_blank" rel="noopener noreferrer">Created with Perplexity Computer</a>
+  </footer>
+</div>
+
+<!-- Info Overlay -->
+<div class="info-overlay" id="infoOverlay" onclick="if(event.target===this)toggleInfo()">
+  <div class="info-modal">
+    <div class="info-modal-header">
+      <span class="info-modal-title">What is X-Mode?</span>
+      <button class="info-close-btn" onclick="toggleInfo()">&times;</button>
+    </div>
+    <div class="info-body">
+      <p>
+        For the <strong>2026 F1 season</strong>, traditional DRS is replaced by a new
+        <strong>X-Mode</strong> (also called overtake mode) system that activates
+        moveable rear wing elements.
+      </p>
+      <p>
+        This tracker counts every wing <strong>state transition</strong> — both
+        opening and closing. Each transition adds
+        <span class="info-highlight">+30°</span> to the cumulative angle tally.
+        One full open-close cycle therefore equals <span class="info-highlight">60°</span>.
+      </p>
+      <p>
+        We assume all teams' rear wings move approximately <strong>30 degrees</strong>
+        per transition, since exact angles per car are not publicly confirmed —
+        except <strong>Ferrari</strong>, whose rear wings open a full
+        <span class="info-highlight">180°</span> per transition.
+      </p>
+      <p>
+        Counts update <strong>live during sessions</strong> (1 s refresh) and accumulate
+        across the entire season. Ranked from most to least total angle.
+      </p>
+    </div>
+  </div>
+</div>
+
+<script>
+const API_BASE = '';
+let currentData = null;
+let currentView = 'drivers';
+let eventSource = null;
+let reconnectTimer = null;
+let lastUpdateTime = null;
+
+// ── Info toggle ──────────────────────────────────────────
+function toggleInfo() {
+  document.getElementById('infoOverlay').classList.toggle('visible');
+}
+
+// ── SSE Connection ──────────────────────────────────────
+function connectSSE() {
+  if (eventSource) eventSource.close();
+  eventSource = new EventSource(`${API_BASE}/api/stream`);
+  eventSource.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      currentData = data;
+      lastUpdateTime = Date.now();
+      render(data);
+    } catch (e) {
+      console.error('Parse error:', e);
+    }
+  };
+  eventSource.onerror = () => {
+    eventSource.close();
+    eventSource = null;
+    clearTimeout(reconnectTimer);
+    reconnectTimer = setTimeout(connectSSE, 3000);
+    document.getElementById('updatedBar').textContent = 'Reconnecting...';
+  };
+}
+
+async function initialLoad() {
+  try {
+    const resp = await fetch(`${API_BASE}/api/state`);
+    const data = await resp.json();
+    currentData = data;
+    lastUpdateTime = Date.now();
+    render(data);
+  } catch (e) {
+    console.error('Initial load failed:', e);
+  }
+}
+
+// ── Render ───────────────────────────────────────────────
+function render(data) {
+  document.getElementById('headerYear').textContent = data.year || 2026;
+  renderStatus(data);
+  renderKPIs(data);
+  renderNextRace(data);
+  renderDrivers(data);
+  renderTeams(data);
+  renderUpdated(data);
+}
+
+function renderStatus(data) {
+  const bar = document.getElementById('statusBar');
+  if (data.is_live && data.session) {
+    const s = data.session;
+    bar.innerHTML = `
+      <span class="live-badge"><span class="live-dot"></span> LIVE</span>
+      <span>${s.session_type.toUpperCase()} &middot; ${s.circuit}</span>
+    `;
+  } else if (data.loading) {
+    bar.innerHTML = `<span class="idle-badge">LOADING SEASON DATA...</span>`;
+  } else {
+    const raceCount = data.completed_races || 0;
+    const suffix = raceCount === 0 ? 'PRE-SEASON' : `${raceCount} RACE${raceCount > 1 ? 'S' : ''} COMPLETE`;
+    bar.innerHTML = `<span class="idle-badge">OFF-SESSION &middot; ${suffix}</span>`;
+  }
+}
+
+function renderKPIs(data) {
+  const drivers = data.drivers || [];
+  const totalAct = drivers.reduce((sum, d) => sum + d.total_activations, 0);
+  const totalAngle = drivers.reduce((sum, d) => sum + d.total_angle, 0);
+  document.getElementById('kpiTotalActivations').textContent = totalAct.toLocaleString();
+  document.getElementById('kpiTotalAngle').textContent = totalAngle === 0 ? '0°' : formatAngle(totalAngle) + '°';
+  document.getElementById('kpiRaces').textContent = data.completed_races || 0;
+}
+
+function renderNextRace(data) {
+  const container = document.getElementById('nextRaceContainer');
+  if (data.is_live || !data.next_race) {
+    container.innerHTML = '';
+    return;
+  }
+  const nr = data.next_race;
+  const dt = new Date(nr.date_start);
+  const now = new Date();
+  const diffMs = dt - now;
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  let countdown = '';
+  if (diffDays <= 0) countdown = 'Today';
+  else if (diffDays === 1) countdown = 'Tomorrow';
+  else countdown = `In ${diffDays} days`;
+
+  const dateStr = dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' });
+  container.innerHTML = `
+    <div class="next-race-banner">
+      <div class="icon">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#e10600" stroke-width="2"><polygon points="5 3 19 12 5 21"/></svg>
+      </div>
+      <div class="next-race-info">
+        <div class="next-race-label">Next Race &middot; ${countdown}</div>
+        <div class="next-race-name">${nr.meeting_name || nr.circuit}</div>
+        <div class="next-race-date">${dateStr}</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderDrivers(data) {
+  const list = document.getElementById('driverList');
+  const skeleton = document.getElementById('skeletonList');
+  const drivers = data.drivers || [];
+
+  if (drivers.length === 0) {
+    skeleton.style.display = 'flex';
+    list.innerHTML = '';
+    return;
+  }
+
+  skeleton.style.display = 'none';
+
+  list.innerHTML = drivers.map((d, i) => {
+    const teamColor = `#${d.team_colour}`;
+    const isFerrari = d.team_name.toLowerCase().includes('ferrari');
+    const isActive = d.xmode_active;
+    const angleDisplay = d.total_angle === 0 ? '0' : formatAngle(d.total_angle);
+    const anglePerT = d.angle_per_activation || 30;
+
+    return `
+      <div class="driver-card ${isActive ? 'xmode-active' : ''} ${isFerrari ? 'ferrari' : ''}"
+           style="--team-color: ${teamColor}">
+        <div class="driver-rank">${i + 1}</div>
+        <div class="driver-avatar">
+          ${d.headshot_url
+            ? `<img src="${d.headshot_url}" alt="${d.name_acronym}" loading="lazy" onerror="this.style.display='none'">`
+            : ''
+          }
+        </div>
+        <div class="driver-info">
+          <div class="driver-top-row">
+            <span class="driver-acronym">${d.name_acronym}</span>
+            <span class="driver-team">${d.team_name}</span>
+          </div>
+          <div class="driver-stats-row">
+            ${data.is_live ? `<div>
+              <span class="driver-stat-label">Race </span>
+              <span class="driver-stat-value">${d.current_race_activations}</span>
+            </div>` : `<div>
+              <span class="driver-stat-label">Last </span>
+              <span class="driver-stat-value">${d.last_race_activations}</span>
+            </div>`}
+            <div>
+              <span class="driver-stat-label">Total </span>
+              <span class="driver-stat-value">${d.total_activations}</span>
+            </div>
+            <div>
+              <span class="driver-stat-label">${anglePerT}°/t</span>
+            </div>
+          </div>
+        </div>
+        <div class="driver-angle">
+          <div class="driver-angle-value">${angleDisplay}</div>
+          <div class="driver-angle-unit">degrees</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderTeams(data) {
+  const list = document.getElementById('teamList');
+  const drivers = data.drivers || [];
+  const teams = {};
+  drivers.forEach(d => {
+    if (!teams[d.team_name]) {
+      teams[d.team_name] = {
+        name: d.team_name,
+        colour: d.team_colour,
+        drivers: [],
+        totalAngle: 0,
+        totalActivations: 0,
+      };
+    }
+    teams[d.team_name].drivers.push(d);
+    teams[d.team_name].totalAngle += d.total_angle;
+    teams[d.team_name].totalActivations += d.total_activations;
+  });
+
+  const sorted = Object.values(teams).sort((a, b) => b.totalAngle - a.totalAngle);
+
+  list.innerHTML = sorted.map(t => {
+    const angleDisplay = t.totalAngle === 0 ? '0' : formatAngle(t.totalAngle);
+    return `
+    <div class="team-card" style="--team-color: #${t.colour}">
+      <div class="team-header">
+        <div class="team-name">${t.name}</div>
+        <div>
+          <span class="team-total">${angleDisplay}</span>
+          <span class="team-total-unit">deg</span>
+        </div>
+      </div>
+      <div class="team-drivers">
+        ${t.drivers.map(d => `
+          <div class="team-driver-mini">
+            <div class="team-driver-mini-avatar">
+              ${d.headshot_url
+                ? `<img src="${d.headshot_url}" alt="${d.name_acronym}" loading="lazy" onerror="this.style.display='none'">`
+                : ''
+              }
+            </div>
+            <div class="team-driver-mini-info">
+              <div class="team-driver-mini-name">${d.name_acronym}</div>
+              <div class="team-driver-mini-angle">${d.total_angle === 0 ? '0°' : formatAngle(d.total_angle) + '°'}  ·  ${d.total_activations} t</div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `}).join('');
+}
+
+function renderUpdated(data) {
+  const bar = document.getElementById('updatedBar');
+  if (lastUpdateTime) {
+    const ago = Math.round((Date.now() - lastUpdateTime) / 1000);
+    bar.textContent = `Updated: ${ago < 2 ? 'just now' : ago + 's ago'}`;
+  }
+}
+
+setInterval(() => {
+  if (lastUpdateTime) {
+    const ago = Math.round((Date.now() - lastUpdateTime) / 1000);
+    document.getElementById('updatedBar').textContent =
+      `Updated: ${ago < 2 ? 'just now' : ago + 's ago'}`;
+  }
+}, 1000);
+
+// ── Helpers ──────────────────────────────────────────────
+function formatAngle(deg) {
+  if (deg >= 1000000) return (deg / 1000000).toFixed(1) + 'M';
+  if (deg >= 10000) return (deg / 1000).toFixed(1) + 'K';
+  return deg.toLocaleString();
+}
+
+function switchView(view) {
+  currentView = view;
+  document.querySelectorAll('.tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.view === view);
+  });
+  document.getElementById('viewDrivers').classList.toggle('active', view === 'drivers');
+  document.getElementById('viewTeams').classList.toggle('active', view === 'teams');
+}
+
+// ── Init ─────────────────────────────────────────────────
+connectSSE();
+setTimeout(initialLoad, 1500);
+</script>
+</body>
+</html>
