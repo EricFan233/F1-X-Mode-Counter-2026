@@ -172,16 +172,15 @@ async def count_xmode_for_driver(session_key, driver_number, session_start, sess
             resp = await client.get(url, timeout=20)
             if resp.status_code == 200:
                 data = resp.json()
-                if isinstance(data, list):
-                    for row in data:
-                        drs = row.get("drs", 0)
-                        if prev_drs is not None:
-                            was_open = prev_drs in DRS_OPEN_VALUES
-                            is_open = drs in DRS_OPEN_VALUES
-                            if was_open != is_open:
-                                # Transition detected (open→close or close→open)
-                                activations += 1
-                        prev_drs = drs
+                for row in data:
+                    drs = row.get("drs", 0)
+                    if prev_drs is not None:
+                        was_open = prev_drs in DRS_OPEN_VALUES
+                        is_open = drs in DRS_OPEN_VALUES
+                        if was_open != is_open:
+                            # Transition detected (open→close or close→open)
+                            activations += 1
+                    prev_drs = drs
         except Exception:
             pass
         current = next_time
@@ -202,7 +201,7 @@ async def process_session(session_info):
 
     # Load drivers for this session
     drivers = await fetch_json("drivers", {"session_key": session_key})
-    if not isinstance(drivers, list) or not drivers:
+    if not drivers:
         print(f"[WARN] No drivers for session {session_key}")
         return
 
@@ -312,7 +311,7 @@ async def poll_live():
     except Exception:
         return
 
-    if not isinstance(data, list) or not data:
+    if not data:
         return
 
     by_driver = {}
@@ -458,22 +457,21 @@ async def main_loop():
     await load_season_data()
     print(f"[INFO] {len(all_meetings)} meetings, {len(all_sessions)} sessions")
 
-    # Load latest driver metadata — try multiple sessions until we find one with a full grid
+    # Load driver metadata — try OLDEST sessions first.
+    # Pre-season test sessions (earliest in the calendar) reliably have full grids.
+    # Future race sessions return no data until race weekend.
     if len(driver_metadata) < 10:
-        race_sessions = sorted(
+        all_typed_sessions = sorted(
             [s for s in all_sessions if s.get("session_type") in ("Race", "Sprint", "Qualifying", "Practice")],
-            key=lambda s: s["date_start"],
-            reverse=True,
+            key=lambda s: s["date_start"],  # ascending — oldest first
         )
-        for s in race_sessions[:20]:  # Try up to 20 most recent sessions
+        for s in all_typed_sessions:
             await load_drivers(s["session_key"])
             if len(driver_metadata) >= 10:  # Need at least 10 drivers for a valid grid
-                print(f"[INFO] Loaded {len(driver_metadata)} drivers from session {s['session_key']}")
+                print(f"[INFO] Loaded {len(driver_metadata)} drivers from session {s['session_key']} ({s.get('session_name', '')})")
                 break
-            print(f"[INFO] Session {s['session_key']} returned {len(driver_metadata)} drivers so far, trying next...")
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.3)
 
-    print(f"[INFO] Final driver count: {len(driver_metadata)}")
     await broadcast_state()
 
     # Periodically reload cache from disk (precompute.py populates it)
