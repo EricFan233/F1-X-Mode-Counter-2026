@@ -111,7 +111,7 @@ body {
 .header-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 .header-year {
   font-family: var(--font-mono);
@@ -121,15 +121,14 @@ body {
   letter-spacing: 0.06em;
 }
 
-/* ── Info Button ───────────────────────────────────────── */
-.info-btn {
-  width: 26px;
+/* ── Header Buttons (Info + Lang) ─────────────────────── */
+.header-btn {
   height: 26px;
-  border-radius: 50%;
+  border-radius: 13px;
   border: 1.5px solid var(--border-medium);
   background: var(--bg-card);
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 700;
   cursor: pointer;
   display: flex;
@@ -139,8 +138,17 @@ body {
   -webkit-tap-highlight-color: transparent;
   font-family: 'Inter', sans-serif;
   line-height: 1;
+  padding: 0 8px;
+  gap: 3px;
 }
-.info-btn:hover { border-color: var(--accent-blue); color: var(--accent-blue); }
+.header-btn.round {
+  width: 26px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 13px;
+}
+.header-btn:hover { border-color: var(--accent-blue); color: var(--accent-blue); }
+.lang-icon { font-size: 12px; }
 
 /* ── Info Modal ────────────────────────────────────────── */
 .info-overlay {
@@ -653,7 +661,7 @@ body {
 @media (max-width: 380px) {
   .team-drivers { grid-template-columns: 1fr; }
   .driver-stats-row { gap: 8px; }
-  .driver-angle-value { font-size: 16px; }
+  .driver-angle-value { font-size: 14px; }
 }
 
 /* ── Wide ──────────────────────────────────────────────── */
@@ -680,10 +688,11 @@ body {
           <rect width="36" height="20" rx="3" fill="#e10600"/>
           <text x="18" y="15" text-anchor="middle" font-family="'Inter',sans-serif" font-weight="900" font-size="14" fill="white">F1</text>
         </svg>
-        <span class="header-title">X-Mode Counter</span>
+        <span class="header-title" id="headerTitle">X-Mode Counter</span>
       </div>
       <div class="header-right">
-        <button class="info-btn" onclick="toggleInfo()" aria-label="What is this?">?</button>
+        <button class="header-btn round" onclick="toggleInfo()" aria-label="What is this?">?</button>
+        <button class="header-btn" onclick="toggleLang()" id="langBtn" aria-label="Switch language"><span class="lang-icon">&#127760;</span> EN</button>
         <span class="header-year" id="headerYear">2026</span>
       </div>
     </div>
@@ -692,15 +701,15 @@ body {
     </div>
     <div class="kpi-strip" id="kpiStrip">
       <div class="kpi-card">
-        <div class="kpi-label">Deployments</div>
+        <div class="kpi-label" id="kpiLabelDeploy">Deployments</div>
         <div class="kpi-value" id="kpiTotalActivations">0</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-label">Total Angle</div>
+        <div class="kpi-label" id="kpiLabelAngle">Total Angle</div>
         <div class="kpi-value accent" id="kpiTotalAngle">0°</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-label">Races</div>
+        <div class="kpi-label" id="kpiLabelRaces">Races</div>
         <div class="kpi-value" id="kpiRaces">0</div>
       </div>
     </div>
@@ -709,8 +718,8 @@ body {
 
   <!-- Tabs: Drivers and Teams -->
   <div class="tab-bar">
-    <button class="tab active" data-view="drivers" onclick="switchView('drivers')">Drivers</button>
-    <button class="tab" data-view="teams" onclick="switchView('teams')">Teams</button>
+    <button class="tab active" data-view="drivers" onclick="switchView('drivers')" id="tabDrivers">Drivers</button>
+    <button class="tab" data-view="teams" onclick="switchView('teams')" id="tabTeams">Teams</button>
   </div>
 
   <!-- Driver View -->
@@ -733,7 +742,7 @@ body {
   <div class="updated-bar" id="updatedBar">Connecting...</div>
 
   <!-- Footer -->
-  <footer class="footer">
+  <footer class="footer" id="footerBar">
     Data from <a href="https://openf1.org" target="_blank" rel="noopener noreferrer">OpenF1</a> &middot;
     <a href="https://www.perplexity.ai/computer" target="_blank" rel="noopener noreferrer">Created with Perplexity Computer</a>
   </footer>
@@ -743,10 +752,54 @@ body {
 <div class="info-overlay" id="infoOverlay" onclick="if(event.target===this)toggleInfo()">
   <div class="info-modal">
     <div class="info-modal-header">
-      <span class="info-modal-title">What is X-Mode?</span>
+      <span class="info-modal-title" id="infoTitle">What is X-Mode?</span>
       <button class="info-close-btn" onclick="toggleInfo()">&times;</button>
     </div>
-    <div class="info-body">
+    <div class="info-body" id="infoBody">
+    </div>
+  </div>
+</div>
+
+<script>
+const API_BASE = '';
+let currentData = null;
+let currentView = 'drivers';
+let eventSource = null;
+let reconnectTimer = null;
+let lastUpdateTime = null;
+let currentLang = (navigator.language || '').startsWith('zh') ? 'zh' : 'en';
+
+// ── i18n ─────────────────────────────────────────────────
+const i18n = {
+  en: {
+    title: 'X-Mode Counter',
+    deployments: 'Deployments',
+    totalAngle: 'Total Angle',
+    races: 'Races',
+    drivers: 'Drivers',
+    teams: 'Teams',
+    live: 'LIVE',
+    loading: 'LOADING SEASON DATA...',
+    preSeason: 'PRE-SEASON',
+    raceComplete: (n) => `${n} RACE${n > 1 ? 'S' : ''} COMPLETE`,
+    offSession: 'OFF-SESSION',
+    nextRace: 'Next Race',
+    today: 'Today',
+    tomorrow: 'Tomorrow',
+    inDays: (n) => `In ${n} days`,
+    race: 'Race',
+    last: 'Last',
+    total: 'Total',
+    degrees: 'degrees',
+    deg: 'deg',
+    connecting: 'Connecting...',
+    reconnecting: 'Reconnecting...',
+    updated: 'Updated',
+    justNow: 'just now',
+    sAgo: (n) => `${n}s ago`,
+    footer: 'Data from <a href="https://openf1.org" target="_blank" rel="noopener noreferrer">OpenF1</a> &middot; <a href="https://www.perplexity.ai/computer" target="_blank" rel="noopener noreferrer">Created with Perplexity Computer</a>',
+    infoTitle: 'What is X-Mode?',
+    infoBody: `
       <p>
         For the <strong>2026 F1 season</strong>, traditional DRS is replaced by
         <strong>Active Aero</strong> — front and rear wings flip between
@@ -765,20 +818,89 @@ body {
         <span class="info-highlight">180°</span> per deployment.
       </p>
       <p>
-        Counts are based on <strong>completed laps × zones</strong> per circuit
+        Counts are based on <strong>completed laps &times; zones</strong> per circuit
         and update <strong>live during sessions</strong>. Ranked by total angle.
       </p>
-    </div>
-  </div>
-</div>
+    `,
+    dateLocale: 'en-US',
+  },
+  zh: {
+    title: 'X-Mode 计数器',
+    deployments: '展开次数',
+    totalAngle: '总角度',
+    races: '比赛',
+    drivers: '车手',
+    teams: '车队',
+    live: '直播中',
+    loading: '正在加载赛季数据...',
+    preSeason: '季前赛',
+    raceComplete: (n) => `已完成 ${n} 场比赛`,
+    offSession: '非比赛时段',
+    nextRace: '下一场比赛',
+    today: '今天',
+    tomorrow: '明天',
+    inDays: (n) => `${n} 天后`,
+    race: '本场',
+    last: '上场',
+    total: '总计',
+    degrees: '度',
+    deg: '度',
+    connecting: '连接中...',
+    reconnecting: '重新连接中...',
+    updated: '更新于',
+    justNow: '刚刚',
+    sAgo: (n) => `${n}秒前`,
+    footer: '数据来自 <a href="https://openf1.org" target="_blank" rel="noopener noreferrer">OpenF1</a> &middot; <a href="https://www.perplexity.ai/computer" target="_blank" rel="noopener noreferrer">由 Perplexity Computer 创建</a>',
+    infoTitle: '什么是 X-Mode？',
+    infoBody: `
+      <p>
+        在 <strong>2026 F1 赛季</strong>中，传统的 DRS 被
+        <strong>主动空气动力学</strong>所取代 — 前后翼在每圈的 FIA 指定区域内
+        在<strong>直道模式</strong>（低阻力）和<strong>弯道模式</strong>（高下压力）之间切换。
+      </p>
+      <p>
+        本追踪器统计每一次尾翼<strong>展开</strong> — 包括打开和关闭。
+        每圈每个直道模式区域 = 2 次展开。
+        每次展开增加 <span class="info-highlight">+30°</span>。
+        墨尔本有 <strong>4 个区域/圈</strong> = 每圈 8 次展开。
+      </p>
+      <p>
+        我们假设所有车队的尾翼每次展开约 <strong>30 度</strong>
+        — 但 <strong>法拉利</strong> 除外，其尾翼每次展开达到
+        <span class="info-highlight">180°</span>。
+      </p>
+      <p>
+        统计基于<strong>完成圈数 &times; 赛道区域数</strong>，
+        在<strong>比赛期间实时更新</strong>。按总角度排名。
+      </p>
+    `,
+    dateLocale: 'zh-CN',
+  },
+};
 
-<script>
-const API_BASE = '';
-let currentData = null;
-let currentView = 'drivers';
-let eventSource = null;
-let reconnectTimer = null;
-let lastUpdateTime = null;
+function t(key) { return i18n[currentLang][key]; }
+
+// ── Language toggle ──────────────────────────────────────
+function toggleLang() {
+  currentLang = currentLang === 'en' ? 'zh' : 'en';
+  localStorage.setItem('momcounter_lang', currentLang);
+  document.getElementById('langBtn').innerHTML = `<span class="lang-icon">&#127760;</span> ${currentLang === 'en' ? 'EN' : '中'}`;
+  document.documentElement.lang = currentLang === 'zh' ? 'zh-CN' : 'en';
+  applyStaticLabels();
+  if (currentData) render(currentData);
+}
+
+function applyStaticLabels() {
+  document.getElementById('headerTitle').textContent = t('title');
+  document.getElementById('kpiLabelDeploy').textContent = t('deployments');
+  document.getElementById('kpiLabelAngle').textContent = t('totalAngle');
+  document.getElementById('kpiLabelRaces').textContent = t('races');
+  document.getElementById('tabDrivers').textContent = t('drivers');
+  document.getElementById('tabTeams').textContent = t('teams');
+  document.getElementById('infoTitle').textContent = t('infoTitle');
+  document.getElementById('infoBody').innerHTML = t('infoBody');
+  document.getElementById('footerBar').innerHTML = t('footer');
+}
 
 // ── Info toggle ──────────────────────────────────────────
 function toggleInfo() {
@@ -804,7 +926,7 @@ function connectSSE() {
     eventSource = null;
     clearTimeout(reconnectTimer);
     reconnectTimer = setTimeout(connectSSE, 3000);
-    document.getElementById('updatedBar').textContent = 'Reconnecting...';
+    document.getElementById('updatedBar').textContent = t('reconnecting');
   };
 }
 
@@ -836,15 +958,15 @@ function renderStatus(data) {
   if (data.is_live && data.session) {
     const s = data.session;
     bar.innerHTML = `
-      <span class="live-badge"><span class="live-dot"></span> LIVE</span>
+      <span class="live-badge"><span class="live-dot"></span> ${t('live')}</span>
       <span>${s.session_type.toUpperCase()} &middot; ${s.circuit}</span>
     `;
   } else if (data.loading) {
-    bar.innerHTML = `<span class="idle-badge">LOADING SEASON DATA...</span>`;
+    bar.innerHTML = `<span class="idle-badge">${t('loading')}</span>`;
   } else {
     const raceCount = data.completed_races || 0;
-    const suffix = raceCount === 0 ? 'PRE-SEASON' : `${raceCount} RACE${raceCount > 1 ? 'S' : ''} COMPLETE`;
-    bar.innerHTML = `<span class="idle-badge">OFF-SESSION &middot; ${suffix}</span>`;
+    const suffix = raceCount === 0 ? t('preSeason') : t('raceComplete')(raceCount);
+    bar.innerHTML = `<span class="idle-badge">${t('offSession')} &middot; ${suffix}</span>`;
   }
 }
 
@@ -869,18 +991,18 @@ function renderNextRace(data) {
   const diffMs = dt - now;
   const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
   let countdown = '';
-  if (diffDays <= 0) countdown = 'Today';
-  else if (diffDays === 1) countdown = 'Tomorrow';
-  else countdown = `In ${diffDays} days`;
+  if (diffDays <= 0) countdown = t('today');
+  else if (diffDays === 1) countdown = t('tomorrow');
+  else countdown = t('inDays')(diffDays);
 
-  const dateStr = dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' });
+  const dateStr = dt.toLocaleDateString(t('dateLocale'), { month: 'short', day: 'numeric', weekday: 'short' });
   container.innerHTML = `
     <div class="next-race-banner">
       <div class="icon">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#e10600" stroke-width="2"><polygon points="5 3 19 12 5 21"/></svg>
       </div>
       <div class="next-race-info">
-        <div class="next-race-label">Next Race &middot; ${countdown}</div>
+        <div class="next-race-label">${t('nextRace')} &middot; ${countdown}</div>
         <div class="next-race-name">${nr.meeting_name || nr.circuit}</div>
         <div class="next-race-date">${dateStr}</div>
       </div>
@@ -925,14 +1047,14 @@ function renderDrivers(data) {
           </div>
           <div class="driver-stats-row">
             ${data.is_live ? `<div>
-              <span class="driver-stat-label">Race </span>
+              <span class="driver-stat-label">${t('race')} </span>
               <span class="driver-stat-value">${d.current_race_activations}</span>
             </div>` : `<div>
-              <span class="driver-stat-label">Last </span>
+              <span class="driver-stat-label">${t('last')} </span>
               <span class="driver-stat-value">${d.last_race_activations}</span>
             </div>`}
             <div>
-              <span class="driver-stat-label">Total </span>
+              <span class="driver-stat-label">${t('total')} </span>
               <span class="driver-stat-value">${d.total_activations}</span>
             </div>
             <div>
@@ -942,7 +1064,7 @@ function renderDrivers(data) {
         </div>
         <div class="driver-angle">
           <div class="driver-angle-value">${angleDisplay}</div>
-          <div class="driver-angle-unit">degrees</div>
+          <div class="driver-angle-unit">${t('degrees')}</div>
         </div>
       </div>
     `;
@@ -970,19 +1092,19 @@ function renderTeams(data) {
 
   const sorted = Object.values(teams).sort((a, b) => b.totalAngle - a.totalAngle);
 
-  list.innerHTML = sorted.map(t => {
-    const angleDisplay = t.totalAngle === 0 ? '0' : formatAngle(t.totalAngle);
+  list.innerHTML = sorted.map(t_item => {
+    const angleDisplay = t_item.totalAngle === 0 ? '0' : formatAngle(t_item.totalAngle);
     return `
-    <div class="team-card" style="--team-color: #${t.colour}">
+    <div class="team-card" style="--team-color: #${t_item.colour}">
       <div class="team-header">
-        <div class="team-name">${t.name}</div>
+        <div class="team-name">${t_item.name}</div>
         <div>
           <span class="team-total">${angleDisplay}</span>
-          <span class="team-total-unit">deg</span>
+          <span class="team-total-unit">${t('deg')}</span>
         </div>
       </div>
       <div class="team-drivers">
-        ${t.drivers.map(d => `
+        ${t_item.drivers.map(d => `
           <div class="team-driver-mini">
             <div class="team-driver-mini-avatar">
               ${d.headshot_url
@@ -1005,7 +1127,7 @@ function renderUpdated(data) {
   const bar = document.getElementById('updatedBar');
   if (lastUpdateTime) {
     const ago = Math.round((Date.now() - lastUpdateTime) / 1000);
-    bar.textContent = `Updated: ${ago < 2 ? 'just now' : ago + 's ago'}`;
+    bar.textContent = `${t('updated')}: ${ago < 2 ? t('justNow') : t('sAgo')(ago)}`;
   }
 }
 
@@ -1013,14 +1135,13 @@ setInterval(() => {
   if (lastUpdateTime) {
     const ago = Math.round((Date.now() - lastUpdateTime) / 1000);
     document.getElementById('updatedBar').textContent =
-      `Updated: ${ago < 2 ? 'just now' : ago + 's ago'}`;
+      `${t('updated')}: ${ago < 2 ? t('justNow') : t('sAgo')(ago)}`;
   }
 }, 1000);
 
 // ── Helpers ──────────────────────────────────────────────
 function formatAngle(deg) {
   if (deg >= 1000000) return (deg / 1000000).toFixed(1) + 'M';
-  if (deg >= 10000) return (deg / 1000).toFixed(1) + 'K';
   return deg.toLocaleString();
 }
 
@@ -1034,6 +1155,14 @@ function switchView(view) {
 }
 
 // ── Init ─────────────────────────────────────────────────
+// Restore saved language preference
+const savedLang = localStorage.getItem('momcounter_lang');
+if (savedLang && (savedLang === 'en' || savedLang === 'zh')) {
+  currentLang = savedLang;
+}
+document.getElementById('langBtn').innerHTML = `<span class="lang-icon">&#127760;</span> ${currentLang === 'en' ? 'EN' : '中'}`;
+document.documentElement.lang = currentLang === 'zh' ? 'zh-CN' : 'en';
+applyStaticLabels();
 connectSSE();
 setTimeout(initialLoad, 1500);
 </script>
