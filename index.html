@@ -29,7 +29,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 
 <style>
-/* ── Reset ───────────────────────────────────────────── */
+/* ── Reset ─────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html {
   -webkit-font-smoothing: antialiased;
@@ -44,7 +44,7 @@ body {
   overflow-x: hidden;
 }
 
-/* ── Tokens ──────────────────────────────────────────── */
+/* ── Tokens ────────────────────────────────────────────── */
 :root {
   --bg-deep: #08080d;
   --bg-surface: #111118;
@@ -66,7 +66,7 @@ body {
   --transition-fast: 180ms var(--ease-out);
 }
 
-/* ── Layout ──────────────────────────────────────────── */
+/* ── Layout ────────────────────────────────────────────── */
 .app {
   max-width: 500px;
   margin: 0 auto;
@@ -79,7 +79,7 @@ body {
   .app { max-width: 720px; }
 }
 
-/* ── Header ──────────────────────────────────────────── */
+/* ── Header ────────────────────────────────────────────── */
 .header {
   position: sticky;
   top: 0;
@@ -121,7 +121,7 @@ body {
   letter-spacing: 0.06em;
 }
 
-/* ── Info Button ─────────────────────────────────────── */
+/* ── Info Button ───────────────────────────────────────── */
 .info-btn {
   width: 26px;
   height: 26px;
@@ -142,7 +142,7 @@ body {
 }
 .info-btn:hover { border-color: var(--accent-blue); color: var(--accent-blue); }
 
-/* ── Info Modal ──────────────────────────────────────── */
+/* ── Info Modal ────────────────────────────────────────── */
 .info-overlay {
   position: fixed;
   inset: 0;
@@ -222,7 +222,7 @@ body {
   border-radius: 4px;
 }
 
-/* ── Status ──────────────────────────────────────────── */
+/* ── Status ────────────────────────────────────────────── */
 .status-bar {
   margin-top: 8px;
   display: flex;
@@ -264,7 +264,7 @@ body {
   letter-spacing: 0.06em;
 }
 
-/* ── KPI Strip ───────────────────────────────────────── */
+/* ── KPI Strip ─────────────────────────────────────────── */
 .kpi-strip {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
@@ -295,7 +295,7 @@ body {
 }
 .kpi-value.accent { color: var(--accent-red); }
 
-/* ── Next Race ───────────────────────────────────────── */
+/* ── Next Race ─────────────────────────────────────────── */
 .next-race-banner {
   margin-top: 10px;
   background: var(--bg-card);
@@ -337,7 +337,7 @@ body {
   font-weight: 500;
 }
 
-/* ── Tab Bar ─────────────────────────────────────────── */
+/* ── Tab Bar ───────────────────────────────────────────── */
 .tab-bar {
   display: flex;
   gap: 2px;
@@ -369,7 +369,7 @@ body {
 }
 .tab:hover:not(.active) { color: var(--text-secondary); }
 
-/* ── Driver List ─────────────────────────────────────── */
+/* ── Driver List ───────────────────────────────────────── */
 .driver-list {
   margin-top: 10px;
   display: flex;
@@ -489,7 +489,7 @@ body {
   text-align: right;
 }
 
-/* ── Team View ───────────────────────────────────────── */
+/* ── Team View ─────────────────────────────────────────── */
 .team-card {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
@@ -563,7 +563,7 @@ body {
   color: var(--text-secondary);
 }
 
-/* ── Loading / Empty ─────────────────────────────────── */
+/* ── Loading / Empty ───────────────────────────────────── */
 .skeleton-list {
   margin-top: 10px;
   display: flex;
@@ -606,7 +606,7 @@ body {
   line-height: 1.5;
 }
 
-/* ── Updated / Footer ────────────────────────────────── */
+/* ── Updated / Footer ──────────────────────────────────── */
 .updated-bar {
   text-align: center;
   padding: 10px 0;
@@ -629,34 +629,34 @@ body {
 }
 .footer a:hover { color: var(--text-secondary); }
 
-/* ── View Toggle ─────────────────────────────────────── */
+/* ── View Toggle ───────────────────────────────────────── */
 .view-content { display: none; }
 .view-content.active { display: block; }
 
-/* ── X-Mode Flash ────────────────────────────────────── */
+/* ── X-Mode Flash ──────────────────────────────────────── */
 @keyframes xmode-flash {
   0% { box-shadow: 0 0 8px rgba(0, 212, 116, 0.2); }
   50% { box-shadow: 0 0 24px rgba(0, 212, 116, 0.35); }
   100% { box-shadow: 0 0 8px rgba(0, 212, 116, 0.2); }
 }
 
-/* ── Ferrari ─────────────────────────────────────────── */
+/* ── Ferrari ───────────────────────────────────────────── */
 .driver-card.ferrari .driver-angle-value { color: #ff3b30; }
 .driver-card.ferrari .driver-acronym { color: #ff6b5e; }
 
-/* ── Scrollbar ───────────────────────────────────────── */
+/* ── Scrollbar ─────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
 
-/* ── Narrow fix ─────────────────────────────────────── */
+/* ── Narrow fix ───────────────────────────────────────── */
 @media (max-width: 380px) {
   .team-drivers { grid-template-columns: 1fr; }
   .driver-stats-row { gap: 8px; }
   .driver-angle-value { font-size: 16px; }
 }
 
-/* ── Wide ────────────────────────────────────────────── */
+/* ── Wide ──────────────────────────────────────────────── */
 @media (min-width: 768px) {
   .driver-card {
     grid-template-columns: 28px 40px 1fr auto;
@@ -748,25 +748,25 @@ body {
     </div>
     <div class="info-body">
       <p>
-        For the <strong>2026 F1 season</strong>, traditional DRS is replaced by a new
-        <strong>X-Mode</strong> (also called overtake mode) system that activates
-        moveable rear wing elements.
+        For the <strong>2026 F1 season</strong>, traditional DRS is replaced by
+        <strong>Active Aero</strong> — front and rear wings flip between
+        <strong>Straight Mode</strong> (low drag) and <strong>Corner Mode</strong>
+        (high downforce) at FIA-designated zones every lap.
       </p>
       <p>
         This tracker counts every wing <strong>deployment</strong> — both
-        opening and closing. Each deployment adds
-        <span class="info-highlight">+30°</span> to the cumulative angle tally.
-        One full open-close cycle therefore equals <span class="info-highlight">60°</span>.
+        opening and closing. Each Straight Mode zone per lap = 2 deployments.
+        Each deployment adds <span class="info-highlight">+30°</span> to the tally.
+        Melbourne had <strong>4 zones/lap</strong> = 8 deployments per lap.
       </p>
       <p>
-        We assume all teams' rear wings move approximately <strong>30 degrees</strong>
-        per deployment, since exact angles per car are not publicly confirmed —
-        except <strong>Ferrari</strong>, whose rear wings open a full
+        We assume all teams' wings move approximately <strong>30 degrees</strong>
+        per deployment — except <strong>Ferrari</strong>, whose rear wings open a full
         <span class="info-highlight">180°</span> per deployment.
       </p>
       <p>
-        Counts update <strong>live during sessions</strong> (1 s refresh) and accumulate
-        across the entire season. Ranked from most to least total angle.
+        Counts are based on <strong>completed laps × zones</strong> per circuit
+        and update <strong>live during sessions</strong>. Ranked by total angle.
       </p>
     </div>
   </div>
@@ -780,12 +780,12 @@ let eventSource = null;
 let reconnectTimer = null;
 let lastUpdateTime = null;
 
-// ── Info toggle ────────────────────────────────────────
+// ── Info toggle ──────────────────────────────────────────
 function toggleInfo() {
   document.getElementById('infoOverlay').classList.toggle('visible');
 }
 
-// ── SSE Connection ────────────────────────────────────
+// ── SSE Connection ──────────────────────────────────────
 function connectSSE() {
   if (eventSource) eventSource.close();
   eventSource = new EventSource(`${API_BASE}/api/stream`);
@@ -820,7 +820,7 @@ async function initialLoad() {
   }
 }
 
-// ── Render ───────────────────────────────────────────
+// ── Render ───────────────────────────────────────────────
 function render(data) {
   document.getElementById('headerYear').textContent = data.year || 2026;
   renderStatus(data);
@@ -1017,7 +1017,7 @@ setInterval(() => {
   }
 }, 1000);
 
-// ── Helpers ──────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────
 function formatAngle(deg) {
   if (deg >= 1000000) return (deg / 1000000).toFixed(1) + 'M';
   if (deg >= 10000) return (deg / 1000).toFixed(1) + 'K';
@@ -1033,7 +1033,7 @@ function switchView(view) {
   document.getElementById('viewTeams').classList.toggle('active', view === 'teams');
 }
 
-// ── Init ─────────────────────────────────────────────
+// ── Init ─────────────────────────────────────────────────
 connectSSE();
 setTimeout(initialLoad, 1500);
 </script>

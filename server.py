@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """
-F1 X-Mode Angle Counter — Backend Server v3 (2026 rules)
-Tracks rear wing X-Mode activations. Each open/close transition = +30°.
-Pre-processes historical data, caches to disk, and serves live via SSE.
+F1 X-Mode Angle Counter — Backend Server v4 (2026 rules)
+Tracks rear wing X-Mode (Straight Mode) activations.
+Uses lap-based counting since OpenF1 car_data.drs is null for 2026.
+Each Straight Mode zone per lap = 2 deployments (open + close).
+Ferrari: 180° per deployment, all others: 30° per deployment.
 """
 
 import asyncio
 import json
 import os
-import time
 import traceback
 from datetime import datetime, timezone, timedelta
 from contextlib import asynccontextmanager
@@ -28,25 +29,81 @@ SESSION_CHECK_INTERVAL = 120
 CACHE_DIR = Path(__file__).parent / "cache"
 CACHE_DIR.mkdir(exist_ok=True)
 
-# X-Mode (formerly DRS): 10, 12, 14 = open states
-DRS_OPEN_VALUES = {10, 12, 14}
+# Cache version — increment this whenever the counting algorithm changes
+# to force reprocessing of all sessions on next deploy.
+CACHE_VERSION = 2  # v2: lap-based counting (replaces DRS-based v1)
 
 # 2026 rules: most teams use ~30° wing movement.
 # Ferrari rear wings open 180°.
-# We count BOTH open and close as separate activations.
+# We count BOTH open and close as separate deployments.
 X_MODE_ANGLE = 30
 FERRARI_ANGLE = 180
 
+# ── Straight Mode Zones Per Circuit (2026) ─────────────────────────────
+# Each zone = 1 open + 1 close = 2 deployments per lap
+# Sources: FIA event notes, motorsport.com, the-race.com
+CIRCUIT_ZONES = {
+    # Melbourne: Originally 5, reduced to 4 after FP2 (T8-T9 removed for safety)
+    "Melbourne": 4,
+    # Shanghai: TBD - estimate based on circuit characteristics
+    "Shanghai": 5,
+    # Suzuka: TBD
+    "Suzuka": 4,
+    # Sakhir (Bahrain): TBD
+    "Sakhir": 5,
+    # Jeddah: TBD
+    "Jeddah": 5,
+    # Miami: TBD
+    "Miami": 5,
+    # Montreal: TBD
+    "Montreal": 5,
+    # Monte Carlo (Monaco): Fewer zones due to tight circuit
+    "Monte Carlo": 3,
+    # Catalunya (Barcelona): TBD
+    "Catalunya": 5,
+    # Spielberg (Austria): TBD
+    "Spielberg": 4,
+    # Silverstone: TBD
+    "Silverstone": 5,
+    # Spa-Francorchamps: TBD
+    "Spa-Francorchamps": 5,
+    # Hungaroring: Fewer straights
+    "Hungaroring": 4,
+    # Zandvoort: TBD
+    "Zandvoort": 4,
+    # Monza: Many straights
+    "Monza": 6,
+    # Madring: TBD
+    "Madring": 4,
+    # Baku: Long straights
+    "Baku": 5,
+    # Singapore: TBD
+    "Singapore": 5,
+    # Austin (COTA): TBD
+    "Austin": 5,
+    # Mexico City: TBD
+    "Mexico City": 4,
+    # Interlagos (São Paulo): TBD
+    "Interlagos": 4,
+    # Las Vegas: Long straights
+    "Las Vegas": 5,
+    # Lusail (Qatar): TBD
+    "Lusail": 5,
+    # Yas Marina (Abu Dhabi): TBD
+    "Yas Marina Circuit": 5,
+}
+DEFAULT_ZONES = 4  # Fallback if circuit not mapped
+
+
 # ── State ──────────────────────────────────────────────────────────────
 driver_season_stats = {}   # {num: {total_activations, total_angle, race_activations: {sk: count}}}
-driver_live_state = {}     # {num: {activations, xmode_active, last_drs}}
+driver_live_state = {}     # {num: {lap_count, laps_seen: set}}
 driver_metadata = {}       # {num: {name_acronym, team_name, ...}}
 current_session = None
 current_meeting = None
 all_sessions = []
 all_meetings = []
 completed_sessions = set()
-last_poll_timestamp = None
 is_live = False
 last_update_time = None
 sse_clients = []
@@ -59,6 +116,7 @@ client: httpx.AsyncClient = None
 # ── Cache ──────────────────────────────────────────────────────────────
 def save_cache():
     data = {
+        "cache_version": CACHE_VERSION,
         "driver_season_stats": {str(k): v for k, v in driver_season_stats.items()},
         "driver_metadata": {str(k): v for k, v in driver_metadata.items()},
         "completed_sessions": list(completed_sessions),
@@ -71,14 +129,18 @@ def load_cache():
     cache_file = CACHE_DIR / "season_data.json"
     if cache_file.exists():
         data = json.loads(cache_file.read_text())
+        cached_version = data.get("cache_version", 1)
+        if cached_version < CACHE_VERSION:
+            print(f"[CACHE] Stale cache (v{cached_version} < v{CACHE_VERSION}). Clearing and reprocessing.")
+            cache_file.unlink()
+            return
         driver_season_stats = {int(k): v for k, v in data.get("driver_season_stats", {}).items()}
-        # Convert race_activations keys back to int
         for num in driver_season_stats:
             ra = driver_season_stats[num].get("race_activations", {})
             driver_season_stats[num]["race_activations"] = {int(k): v for k, v in ra.items()}
         driver_metadata = {int(k): v for k, v in data.get("driver_metadata", {}).items()}
         completed_sessions = set(data.get("completed_sessions", []))
-        print(f"[CACHE] Loaded {len(completed_sessions)} cached sessions, {len(driver_metadata)} drivers")
+        print(f"[CACHE] Loaded v{cached_version} — {len(completed_sessions)} cached sessions, {len(driver_metadata)} drivers")
 
 
 # ── HTTP ───────────────────────────────────────────────────────────────
@@ -89,11 +151,10 @@ async def fetch_json(endpoint, params=None, timeout=30, retries=3):
             resp = await client.get(url, params=params, timeout=timeout)
             if resp.status_code == 200:
                 data = resp.json()
-                # OpenF1 returns {"detail": "No results found."} for empty queries
                 if isinstance(data, dict) and "detail" in data:
                     return None
                 return data
-            if resp.status_code == 429:  # rate limited
+            if resp.status_code == 429:
                 await asyncio.sleep(2 * (attempt + 1))
                 continue
             return None
@@ -109,10 +170,10 @@ async def fetch_json(endpoint, params=None, timeout=30, retries=3):
 async def load_season_data():
     global all_meetings, all_sessions
     m = await fetch_json("meetings", {"year": YEAR})
-    if m:
+    if isinstance(m, list):
         all_meetings = m
     s = await fetch_json("sessions", {"year": YEAR})
-    if s:
+    if isinstance(s, list):
         all_sessions = s
 
 
@@ -133,6 +194,13 @@ async def load_drivers(session_key):
                 "first_name": d.get("first_name", ""),
                 "last_name": d.get("last_name", ""),
             }
+        return True
+    return False
+
+
+def get_zones_for_circuit(circuit_name):
+    """Get the number of Straight Mode zones for a circuit."""
+    return CIRCUIT_ZONES.get(circuit_name, DEFAULT_ZONES)
 
 
 def get_angle(num):
@@ -144,68 +212,47 @@ def ensure_stats(num):
     if num not in driver_season_stats:
         driver_season_stats[num] = {"total_activations": 0, "total_angle": 0, "race_activations": {}}
     if num not in driver_live_state:
-        driver_live_state[num] = {"activations": 0, "xmode_active": False, "last_drs": 0}
+        driver_live_state[num] = {"lap_count": 0, "laps_seen": set()}
 
 
-# ── Historical Processing ─────────────────────────────────────────────
-async def count_xmode_for_driver(session_key, driver_number, session_start, session_end):
-    """Count X-Mode activations: both open and close transitions.
-    Each transition (open or close) counts as +1 activation (+30°)."""
-    activations = 0
-    prev_drs = None
-    start = datetime.fromisoformat(session_start)
-    end = datetime.fromisoformat(session_end)
-    window = timedelta(minutes=5)
-    current = start
+# ── Lap-Based X-Mode Counting ─────────────────────────────────────────
+async def count_xmode_laps(session_key, driver_number, zones_per_lap):
+    """Count X-Mode activations based on completed laps.
+    Each lap has `zones_per_lap` straight mode zones.
+    Each zone = 2 deployments (open + close)."""
+    laps = await fetch_json("laps", {
+        "session_key": session_key,
+        "driver_number": driver_number,
+    })
+    if not isinstance(laps, list):
+        return 0
 
-    while current < end:
-        next_time = min(current + window, end)
-        # Build URL manually to preserve >= and < operators
-        url = (
-            f"{OPENF1_BASE}/car_data"
-            f"?session_key={session_key}"
-            f"&driver_number={driver_number}"
-            f"&date>={current.strftime('%Y-%m-%dT%H:%M:%S')}"
-            f"&date<{next_time.strftime('%Y-%m-%dT%H:%M:%S')}"
-        )
-        try:
-            resp = await client.get(url, timeout=20)
-            if resp.status_code == 200:
-                data = resp.json()
-                for row in data:
-                    drs = row.get("drs", 0)
-                    if prev_drs is not None:
-                        was_open = prev_drs in DRS_OPEN_VALUES
-                        is_open = drs in DRS_OPEN_VALUES
-                        if was_open != is_open:
-                            # Transition detected (open→close or close→open)
-                            activations += 1
-                    prev_drs = drs
-        except Exception:
-            pass
-        current = next_time
-        await asyncio.sleep(0.3)
+    # Count laps with valid duration (completed laps only)
+    completed_laps = sum(1 for lap in laps if lap.get("lap_duration") is not None)
 
+    # Each lap: zones * 2 deployments (open + close)
+    activations = completed_laps * zones_per_lap * 2
     return activations
 
 
+# ── Historical Processing ─────────────────────────────────────────────
 async def process_session(session_info):
-    """Process a single historical session."""
+    """Process a single historical session using lap-based counting."""
     global historical_progress
     session_key = session_info["session_key"]
-    session_start = session_info["date_start"]
-    session_end = session_info["date_end"]
+    circuit = session_info.get("circuit_short_name", "")
+    zones = get_zones_for_circuit(circuit)
 
     if session_key in completed_sessions:
         return
 
     # Load drivers for this session
     drivers = await fetch_json("drivers", {"session_key": session_key})
-    if not drivers:
+    if not isinstance(drivers, list) or not drivers:
         print(f"[WARN] No drivers for session {session_key}")
         return
 
-    # Update metadata
+    # Update metadata from this race session (more current than pre-season)
     for d in drivers:
         num = d["driver_number"]
         driver_metadata[num] = {
@@ -220,12 +267,13 @@ async def process_session(session_info):
             "last_name": d.get("last_name", ""),
         }
 
-    # Count DRS for each driver (process concurrently in small batches)
     driver_nums = [d["driver_number"] for d in drivers]
+    print(f"[HIST] Processing {circuit} ({session_info.get('session_name', '')}) - {len(driver_nums)} drivers, {zones} zones/lap")
 
-    for i in range(0, len(driver_nums), 2):  # 2 concurrent to avoid rate limits
-        batch = driver_nums[i:i+2]
-        tasks = [count_xmode_for_driver(session_key, num, session_start, session_end) for num in batch]
+    # Process in small batches to avoid rate limits
+    for i in range(0, len(driver_nums), 3):
+        batch = driver_nums[i:i + 3]
+        tasks = [count_xmode_laps(session_key, num, zones) for num in batch]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         for num, result in zip(batch, results):
@@ -238,9 +286,12 @@ async def process_session(session_info):
             )
             driver_season_stats[num]["total_angle"] = driver_season_stats[num]["total_activations"] * angle
 
+        await asyncio.sleep(0.3)
+
     completed_sessions.add(session_key)
     save_cache()
     await broadcast_state()
+    print(f"[HIST] Completed {circuit} - {session_info.get('session_name', '')}")
 
 
 async def load_historical():
@@ -259,7 +310,7 @@ async def load_historical():
 
     total = len(past_sessions)
     for idx, s in enumerate(past_sessions):
-        historical_progress = f"Processing {idx+1}/{total}: {s.get('circuit_short_name', '')} {s.get('session_name', '')}"
+        historical_progress = f"Processing {idx + 1}/{total}: {s.get('circuit_short_name', '')} {s.get('session_name', '')}"
         print(f"[HIST] {historical_progress}")
         try:
             await process_session(s)
@@ -276,6 +327,8 @@ async def load_historical():
 def find_active_session():
     now = datetime.now(timezone.utc)
     for s in all_sessions:
+        if not s.get("date_start") or not s.get("date_end"):
+            continue
         start = datetime.fromisoformat(s["date_start"])
         end = datetime.fromisoformat(s["date_end"])
         if (start - timedelta(minutes=5)) <= now <= (end + timedelta(minutes=30)):
@@ -291,66 +344,65 @@ def find_meeting(session):
     return None
 
 
-# ── Live Polling ───────────────────────────────────────────────────────
+# ── Live Polling (Lap-based) ──────────────────────────────────────────
 async def poll_live():
-    global last_poll_timestamp, last_update_time
+    """Poll for new lap completions during a live session."""
+    global last_update_time
     if not current_session:
         return
 
     sk = current_session["session_key"]
-    # Build URL manually to avoid param encoding issues
-    url = f"{OPENF1_BASE}/car_data?session_key={sk}"
-    if last_poll_timestamp:
-        url += f"&date>{last_poll_timestamp}"
+    circuit = current_session.get("circuit_short_name", "")
+    zones = get_zones_for_circuit(circuit)
 
-    try:
-        resp = await client.get(url, timeout=10)
-        if resp.status_code != 200:
-            return
-        data = resp.json()
-    except Exception:
+    # Get all known driver numbers
+    known_drivers = list(driver_metadata.keys())
+    if not known_drivers:
         return
 
-    if not data:
+    # Fetch laps for all drivers
+    laps_data = await fetch_json("laps", {"session_key": sk})
+    if not isinstance(laps_data, list):
         return
 
+    # Group by driver
     by_driver = {}
-    for row in data:
-        by_driver.setdefault(row["driver_number"], []).append(row)
+    for lap in laps_data:
+        dn = lap.get("driver_number")
+        if dn in driver_metadata:  # Only count known drivers
+            by_driver.setdefault(dn, []).append(lap)
 
-    for num, rows in by_driver.items():
+    changed = False
+    for num, laps in by_driver.items():
         ensure_stats(num)
         live = driver_live_state[num]
 
-        for row in rows:
-            drs = row.get("drs", 0)
-            was_open = live["last_drs"] in DRS_OPEN_VALUES
-            is_open = drs in DRS_OPEN_VALUES
-            if was_open != is_open:
-                # Transition detected (open→close or close→open)
-                live["activations"] += 1
-            live["xmode_active"] = is_open
-            live["last_drs"] = drs
+        # Count completed laps (with valid duration)
+        completed = sum(1 for l in laps if l.get("lap_duration") is not None)
 
-        angle = get_angle(num)
-        driver_season_stats[num]["race_activations"][sk] = live["activations"]
-        driver_season_stats[num]["total_activations"] = sum(
-            driver_season_stats[num]["race_activations"].values()
-        )
-        driver_season_stats[num]["total_angle"] = driver_season_stats[num]["total_activations"] * angle
+        if completed != live["lap_count"]:
+            live["lap_count"] = completed
+            activations = completed * zones * 2
 
-    last_poll_timestamp = data[-1]["date"]
-    last_update_time = datetime.now(timezone.utc).isoformat()
+            angle = get_angle(num)
+            driver_season_stats[num]["race_activations"][sk] = activations
+            driver_season_stats[num]["total_activations"] = sum(
+                driver_season_stats[num]["race_activations"].values()
+            )
+            driver_season_stats[num]["total_angle"] = driver_season_stats[num]["total_activations"] * angle
+            changed = True
+
+    if changed:
+        last_update_time = datetime.now(timezone.utc).isoformat()
 
 
 # ── Payload ────────────────────────────────────────────────────────────
 def build_payload():
     drivers_list = []
-    # Include ALL known drivers, even those with no stats yet
-    all_driver_nums = set(driver_metadata.keys()) | set(driver_season_stats.keys())
-    for num in all_driver_nums:
+    # Only include drivers from metadata (no phantom driver numbers)
+    for num in driver_metadata:
         stats = driver_season_stats.get(num, {"total_activations": 0, "total_angle": 0, "race_activations": {}})
-        meta = driver_metadata.get(num, {})
+        meta = driver_metadata[num]
         live = driver_live_state.get(num, {})
         current_sk = current_session["session_key"] if current_session else None
         current_count = stats["race_activations"].get(current_sk, 0) if current_sk else 0
@@ -374,7 +426,7 @@ def build_payload():
             "team_name": meta.get("team_name", "Unknown"),
             "team_colour": meta.get("team_colour", "FFFFFF"),
             "headshot_url": meta.get("headshot_url", ""),
-            "xmode_active": live.get("xmode_active", False),
+            "xmode_active": False,  # No per-driver X-Mode status in 2026
             "current_race_activations": current_count,
             "last_race_activations": last_race_count,
             "total_activations": stats["total_activations"],
@@ -382,7 +434,7 @@ def build_payload():
             "angle_per_activation": get_angle(num),
         })
 
-    # Sort: by total_angle desc, then by team name for ties at zero
+    # Sort: by total_angle desc, then by team name for ties
     drivers_list.sort(key=lambda d: (d["total_angle"], d["team_name"]), reverse=True)
 
     session_info = None
@@ -406,7 +458,12 @@ def build_payload():
     next_race = None
     if not is_live:
         now = datetime.now(timezone.utc)
-        future = [s for s in all_sessions if s.get("session_type") == "Race" and datetime.fromisoformat(s["date_start"]) > now]
+        future = [
+            s for s in all_sessions
+            if s.get("session_type") in ("Race", "Sprint")
+            and s.get("date_start")
+            and datetime.fromisoformat(s["date_start"]) > now
+        ]
         if future:
             nr = min(future, key=lambda s: s["date_start"])
             m = find_meeting(nr)
@@ -451,42 +508,52 @@ async def broadcast_state():
 
 # ── Main Loop ──────────────────────────────────────────────────────────
 async def main_loop():
-    global current_session, current_meeting, is_live, last_poll_timestamp, driver_live_state
+    global current_session, current_meeting, is_live, driver_live_state
 
     load_cache()
     await load_season_data()
     print(f"[INFO] {len(all_meetings)} meetings, {len(all_sessions)} sessions")
 
-    # Load driver metadata — try OLDEST sessions first.
-    # Pre-season test sessions (earliest in the calendar) reliably have full grids.
-    # Future race sessions return no data until race weekend.
+    # Load driver metadata — try sessions in ascending order (oldest first).
+    # Pre-season test sessions reliably have full grids; future sessions may not.
+    # Then also try the most recent completed sessions for updated metadata.
     if len(driver_metadata) < 10:
-        all_typed_sessions = sorted(
+        all_typed = sorted(
             [s for s in all_sessions if s.get("session_type") in ("Race", "Sprint", "Qualifying", "Practice")],
-            key=lambda s: s["date_start"],  # ascending — oldest first
+            key=lambda s: s["date_start"],
         )
-        for s in all_typed_sessions:
-            await load_drivers(s["session_key"])
-            if len(driver_metadata) >= 10:  # Need at least 10 drivers for a valid grid
+        for s in all_typed:
+            loaded = await load_drivers(s["session_key"])
+            if loaded and len(driver_metadata) >= 10:
                 print(f"[INFO] Loaded {len(driver_metadata)} drivers from session {s['session_key']} ({s.get('session_name', '')})")
                 break
             await asyncio.sleep(0.3)
 
-    await broadcast_state()
+    # Also refresh from most recent completed race/qualifying for latest metadata
+    now = datetime.now(timezone.utc)
+    recent_completed = sorted(
+        [s for s in all_sessions
+         if s.get("date_end") and datetime.fromisoformat(s["date_end"]) < now
+         and s.get("session_type") in ("Race", "Qualifying")],
+        key=lambda s: s["date_start"],
+        reverse=True,
+    )
+    for s in recent_completed[:3]:
+        loaded = await load_drivers(s["session_key"])
+        if loaded:
+            print(f"[INFO] Refreshed metadata from {s.get('session_name', '')} at {s.get('circuit_short_name', '')}")
+            break
+        await asyncio.sleep(0.3)
 
-    # Periodically reload cache from disk (precompute.py populates it)
-    cache_reload_counter = 0
+    # Process any completed races we haven't counted yet
+    await load_historical()
+
+    await broadcast_state()
 
     tick = 0
     while True:
         try:
             tick += 1
-            cache_reload_counter += 1
-
-            # Reload cache from disk every 30s (precompute.py writes it)
-            if cache_reload_counter >= 30:
-                cache_reload_counter = 0
-                load_cache()
 
             if (tick * (POLL_INTERVAL_LIVE if is_live else POLL_INTERVAL_IDLE)) >= SESSION_CHECK_INTERVAL:
                 tick = 0
@@ -498,7 +565,6 @@ async def main_loop():
                 current_session = active
                 current_meeting = find_meeting(active)
                 is_live = True
-                last_poll_timestamp = None
                 driver_live_state = {}
                 await load_drivers(active["session_key"])
                 print(f"[LIVE] {active['session_name']} at {active['circuit_short_name']}")
@@ -512,7 +578,6 @@ async def main_loop():
                 current_session = None
                 current_meeting = None
                 is_live = False
-                last_poll_timestamp = None
             else:
                 is_live = False
 
